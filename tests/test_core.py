@@ -15,7 +15,11 @@ def test_healthcheck_returns_ok(client) -> None:
     response = client.get("/health")
 
     assert response.status_code == 200
-    assert response.json() == {"status": "ok", "database": True}
+    assert response.json() == {
+        "status": "ok",
+        "version": "0.1.0",
+        "database": True,
+    }
 
 
 def test_hash_and_verify_password() -> None:
