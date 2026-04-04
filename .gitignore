@@ -6,3 +6,5 @@ __pycache__/
 *.pyd
 *.db
 *.log
+lifeflow_backend.egg-info
+data/
