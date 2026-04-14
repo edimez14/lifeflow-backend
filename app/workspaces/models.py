@@ -1,19 +1,12 @@
 from __future__ import annotations
 
-import enum
 import uuid
 
 from sqlalchemy import Enum, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.models import Base, TimestampMixin
-
-
-class WorkspaceType(str, enum.Enum):
-    """Workspace visibility types."""
-
-    PUBLIC = "public"
-    PRIVATE = "private"
+from app.workspaces.types import WorkspaceType
 
 
 class Workspace(Base, TimestampMixin):
