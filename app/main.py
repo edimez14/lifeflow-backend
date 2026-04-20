@@ -4,6 +4,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.router import router as core_router
+from app.workspaces.router import router as workspaces_router
 from app.websocket_manager import ConnectionManager
 
 app = FastAPI(title="Lifeflow API", version="0.1.0")
@@ -18,6 +19,7 @@ app.add_middleware(
 
 manager = ConnectionManager()
 app.include_router(core_router)
+app.include_router(workspaces_router)
 
 
 @app.get("/")
