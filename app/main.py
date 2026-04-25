@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.calendar.router import router as calendar_router
 from app.core.router import router as core_router
 from app.workspaces.router import router as workspaces_router
-from app.websocket_manager import ConnectionManager
+from app.websocket_manager import get_connection_manager
 
 app = FastAPI(title="Lifeflow API", version="0.1.0")
 
@@ -18,7 +18,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-manager = ConnectionManager()
 app.include_router(core_router)
 app.include_router(workspaces_router)
 app.include_router(calendar_router)
@@ -35,6 +34,7 @@ async def root() -> dict[str, str]:
 async def websocket_endpoint(websocket: WebSocket, workspace_id: str) -> None:
     """Handle the WebSocket connection for a workspace."""
 
+    manager = get_connection_manager()
     await manager.connect(workspace_id, websocket)
     try:
         while True:

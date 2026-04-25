@@ -26,6 +26,7 @@ from app.calendar.service import (
     update_event,
 )
 from app.database import get_db
+from app.websocket_manager import ConnectionManager, get_connection_manager
 
 
 router = APIRouter(tags=["calendar"])
@@ -107,6 +108,7 @@ async def create_event_view(
     workspace_id: str,
     payload: EventCreate,
     db: AsyncSession = Depends(get_db),
+    manager: ConnectionManager = Depends(get_connection_manager),
 ) -> EventResponse:
     """Create one workspace event."""
 
@@ -118,6 +120,13 @@ async def create_event_view(
             detail=str(exc),
         ) from exc
 
+    await manager.broadcast(
+        workspace_id,
+        {
+            "type": "event.created",
+            "data": EventResponse.model_validate(event).model_dump(mode="json"),
+        },
+    )
     return EventResponse.model_validate(event)
 
 
@@ -127,6 +136,7 @@ async def update_event_view(
     event_id: str,
     payload: EventUpdate,
     db: AsyncSession = Depends(get_db),
+    manager: ConnectionManager = Depends(get_connection_manager),
 ) -> EventResponse:
     """Update one workspace event."""
 
@@ -138,6 +148,13 @@ async def update_event_view(
         )
 
     updated_event = await update_event(db, event, payload)
+    await manager.broadcast(
+        workspace_id,
+        {
+            "type": "event.updated",
+            "data": EventResponse.model_validate(updated_event).model_dump(mode="json"),
+        },
+    )
     return EventResponse.model_validate(updated_event)
 
 
@@ -146,6 +163,7 @@ async def delete_event_view(
     workspace_id: str,
     event_id: str,
     db: AsyncSession = Depends(get_db),
+    manager: ConnectionManager = Depends(get_connection_manager),
 ) -> None:
     """Delete one workspace event."""
 
@@ -157,3 +175,10 @@ async def delete_event_view(
         )
 
     await delete_event(db, event)
+    await manager.broadcast(
+        workspace_id,
+        {
+            "type": "event.deleted",
+            "data": {"id": event_id},
+        },
+    )

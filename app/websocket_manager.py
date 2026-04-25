@@ -47,3 +47,13 @@ class ConnectionManager:
         """Return the workspace ids that currently have active clients."""
 
         return self.active_connections.keys()
+
+
+# Global singleton instance
+_connection_manager = ConnectionManager()
+
+
+def get_connection_manager() -> ConnectionManager:
+    """Dependency that returns the global connection manager."""
+
+    return _connection_manager
