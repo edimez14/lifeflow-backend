@@ -159,6 +159,60 @@ def _in_range(
     return start_datetime <= range_end and end_datetime >= range_start
 
 
+def expand_event_occurrences(
+    event: Event,
+    range_start: datetime,
+    range_end: datetime,
+    exceptions_by_date: dict[datetime, Event] | None = None,
+) -> list[EventResponse]:
+    """
+    Expand the recurrence rule of a single event into concrete instances.
+
+    If exceptions exist for a date the exception replaces the occurrence.
+    Non‑recurring events are returned as a single‑element list when they overlap
+    the requested range.
+    """
+    occurrences: list[EventResponse] = []
+
+    # Non‑recurring event
+    if not event.recurrence_rule:
+        if _in_range(event.start_datetime, event.end_datetime, range_start, range_end):
+            occurrences.append(EventResponse.model_validate(event))
+        return occurrences
+
+    exceptions = exceptions_by_date or {}
+    duration = event.end_datetime - event.start_datetime
+    rule = rrulestr(event.recurrence_rule, dtstart=event.start_datetime)
+    instance_starts = rule.between(range_start, range_end, inc=True)
+
+    for start in instance_starts:
+        # Check for an exception that replaces this occurrence
+        replacement = exceptions.get(start)
+        if replacement is not None:
+            occurrences.append(EventResponse.model_validate(replacement))
+            continue
+
+        end = start + duration
+        # Build a synthetic event response for the generated instance
+        occurrences.append(
+            EventResponse(
+                id=f"{event.id}:{int(start.timestamp())}",
+                calendar_id=event.calendar_id,
+                title=event.title,
+                description=event.description,
+                start_datetime=start,
+                end_datetime=end,
+                recurrence_rule=event.recurrence_rule,
+                color=event.color,
+                category=event.category,
+                is_exception=False,
+                parent_event_id=event.id,
+            )
+        )
+
+    return occurrences
+
+
 async def list_events(
     db: AsyncSession,
     workspace_id: str,
@@ -174,65 +228,26 @@ async def list_events(
     )
     all_events = list(result.scalars().all())
 
+    # Build a lookup of exceptions keyed by parent_id -> start_datetime -> Event
     exceptions_by_parent: dict[str, dict[datetime, Event]] = {}
     for event in all_events:
         if event.is_exception and event.parent_event_id:
             parent_exceptions = exceptions_by_parent.setdefault(
-                event.parent_event_id, {})
+                event.parent_event_id, {}
+            )
             parent_exceptions[event.start_datetime] = event
 
     responses: list[EventResponse] = []
     for event in all_events:
         if event.is_exception:
-            if _in_range(
-                event.start_datetime,
-                event.end_datetime,
-                start_datetime,
-                end_datetime,
-            ):
-                responses.append(EventResponse.model_validate(event))
+            # Exceptions are only shown through their parent expansion
             continue
 
-        if not event.recurrence_rule:
-            if _in_range(
-                event.start_datetime,
-                event.end_datetime,
-                start_datetime,
-                end_datetime,
-            ):
-                responses.append(EventResponse.model_validate(event))
-            continue
-
-        duration = event.end_datetime - event.start_datetime
-        recurrence = rrulestr(event.recurrence_rule,
-                              dtstart=event.start_datetime)
-        occurrences = recurrence.between(
-            start_datetime, end_datetime, inc=True)
-        parent_exceptions = exceptions_by_parent.get(event.id, {})
-
-        for occurrence_start in occurrences:
-            replacement_event = parent_exceptions.get(occurrence_start)
-            if replacement_event is not None:
-                responses.append(
-                    EventResponse.model_validate(replacement_event))
-                continue
-
-            occurrence_end = occurrence_start + duration
-            responses.append(
-                EventResponse(
-                    id=f"{event.id}:{int(occurrence_start.timestamp())}",
-                    calendar_id=event.calendar_id,
-                    title=event.title,
-                    description=event.description,
-                    start_datetime=occurrence_start,
-                    end_datetime=occurrence_end,
-                    recurrence_rule=event.recurrence_rule,
-                    color=event.color,
-                    category=event.category,
-                    is_exception=False,
-                    parent_event_id=event.id,
-                )
-            )
+        exceptions = exceptions_by_parent.get(event.id, {})
+        responses.extend(
+            expand_event_occurrences(
+                event, start_datetime, end_datetime, exceptions)
+        )
 
     responses.sort(key=lambda item: item.start_datetime)
     return responses
