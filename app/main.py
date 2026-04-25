@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.calendar.router import router as calendar_router
 from app.core.router import router as core_router
 from app.workspaces.router import router as workspaces_router
 from app.websocket_manager import ConnectionManager
@@ -20,6 +21,7 @@ app.add_middleware(
 manager = ConnectionManager()
 app.include_router(core_router)
 app.include_router(workspaces_router)
+app.include_router(calendar_router)
 
 
 @app.get("/")
