@@ -6,13 +6,15 @@ from dateutil.rrule import rrulestr
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.calendar.models import Calendar, Event
+from app.calendar.models import Calendar, Event, MonthlyGoal
 from app.calendar.schemas import (
     CalendarCreate,
     CalendarUpdate,
     EventCreate,
     EventResponse,
     EventUpdate,
+    MonthlyGoalCreate,
+    MonthlyGoalResponse,
 )
 
 
@@ -174,7 +176,6 @@ def expand_event_occurrences(
     """
     occurrences: list[EventResponse] = []
 
-    # Non‑recurring event
     if not event.recurrence_rule:
         if _in_range(event.start_datetime, event.end_datetime, range_start, range_end):
             occurrences.append(EventResponse.model_validate(event))
@@ -186,14 +187,12 @@ def expand_event_occurrences(
     instance_starts = rule.between(range_start, range_end, inc=True)
 
     for start in instance_starts:
-        # Check for an exception that replaces this occurrence
         replacement = exceptions.get(start)
         if replacement is not None:
             occurrences.append(EventResponse.model_validate(replacement))
             continue
 
         end = start + duration
-        # Build a synthetic event response for the generated instance
         occurrences.append(
             EventResponse(
                 id=f"{event.id}:{int(start.timestamp())}",
@@ -228,7 +227,6 @@ async def list_events(
     )
     all_events = list(result.scalars().all())
 
-    # Build a lookup of exceptions keyed by parent_id -> start_datetime -> Event
     exceptions_by_parent: dict[str, dict[datetime, Event]] = {}
     for event in all_events:
         if event.is_exception and event.parent_event_id:
@@ -240,7 +238,6 @@ async def list_events(
     responses: list[EventResponse] = []
     for event in all_events:
         if event.is_exception:
-            # Exceptions are only shown through their parent expansion
             continue
 
         exceptions = exceptions_by_parent.get(event.id, {})
@@ -251,3 +248,53 @@ async def list_events(
 
     responses.sort(key=lambda item: item.start_datetime)
     return responses
+
+
+# ---------- Monthly Goals ----------
+
+async def get_monthly_goal(
+    db: AsyncSession,
+    workspace_id: str,
+    year: int,
+    month: int,
+) -> MonthlyGoal | None:
+    """Return the monthly goal for a given workspace, year, and month."""
+
+    result = await db.execute(
+        select(MonthlyGoal).where(
+            MonthlyGoal.workspace_id == workspace_id,
+            MonthlyGoal.year == year,
+            MonthlyGoal.month == month,
+        )
+    )
+    return result.scalar_one_or_none()
+
+
+async def upsert_monthly_goal(
+    db: AsyncSession,
+    workspace_id: str,
+    year: int,
+    month: int,
+    payload: MonthlyGoalCreate,
+) -> MonthlyGoal:
+    """Create or update the monthly goal for a workspace and month."""
+
+    existing = await get_monthly_goal(db, workspace_id, year, month)
+    if existing is not None:
+        existing.goal_text = payload.goal_text
+        existing.action_plan = payload.action_plan
+        await db.commit()
+        await db.refresh(existing)
+        return existing
+
+    new_goal = MonthlyGoal(
+        workspace_id=workspace_id,
+        year=year,
+        month=month,
+        goal_text=payload.goal_text,
+        action_plan=payload.action_plan,
+    )
+    db.add(new_goal)
+    await db.commit()
+    await db.refresh(new_goal)
+    return new_goal

@@ -75,3 +75,27 @@ class EventResponse(EventBase):
 
     id: str
     calendar_id: str
+
+
+# ---------- Monthly Goals ----------
+
+class MonthlyGoalBase(BaseModel):
+    """Shared monthly goal fields."""
+
+    year: int
+    month: int
+    goal_text: str
+    action_plan: str
+
+
+class MonthlyGoalCreate(MonthlyGoalBase):
+    """Data used to create or update a monthly goal."""
+
+
+class MonthlyGoalResponse(MonthlyGoalBase):
+    """Monthly goal returned by API. Fields id and workspace_id are None when no goal exists yet."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str | None = None
+    workspace_id: str | None = None

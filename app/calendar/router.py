@@ -12,6 +12,8 @@ from app.calendar.schemas import (
     EventCreate,
     EventResponse,
     EventUpdate,
+    MonthlyGoalCreate,
+    MonthlyGoalResponse,
 )
 from app.calendar.service import (
     create_calendar,
@@ -20,10 +22,12 @@ from app.calendar.service import (
     delete_event,
     get_calendar_by_id,
     get_event_by_id,
+    get_monthly_goal,
     list_calendars,
     list_events,
     update_calendar,
     update_event,
+    upsert_monthly_goal,
 )
 from app.database import get_db
 from app.websocket_manager import ConnectionManager, get_connection_manager
@@ -182,3 +186,46 @@ async def delete_event_view(
             "data": {"id": event_id},
         },
     )
+
+
+# ---------- Monthly Goals ----------
+
+@router.get(
+    "/workspaces/{workspace_id}/monthly-goals/{year}/{month}",
+    response_model=MonthlyGoalResponse,
+)
+async def read_monthly_goal(
+    workspace_id: str,
+    year: int,
+    month: int,
+    db: AsyncSession = Depends(get_db),
+) -> MonthlyGoalResponse:
+    """Get the monthly goal for a workspace and month. Returns empty fields if none exists."""
+
+    goal = await get_monthly_goal(db, workspace_id, year, month)
+    if goal is not None:
+        return MonthlyGoalResponse.model_validate(goal)
+    # Return a placeholder with the requested year/month
+    return MonthlyGoalResponse(
+        year=year,
+        month=month,
+        goal_text="",
+        action_plan="",
+    )
+
+
+@router.put(
+    "/workspaces/{workspace_id}/monthly-goals/{year}/{month}",
+    response_model=MonthlyGoalResponse,
+)
+async def put_monthly_goal(
+    workspace_id: str,
+    year: int,
+    month: int,
+    payload: MonthlyGoalCreate,
+    db: AsyncSession = Depends(get_db),
+) -> MonthlyGoalResponse:
+    """Create or update the monthly goal for a workspace and month."""
+
+    goal = await upsert_monthly_goal(db, workspace_id, year, month, payload)
+    return MonthlyGoalResponse.model_validate(goal)
