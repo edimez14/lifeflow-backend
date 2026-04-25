@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
+import bcrypt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
@@ -10,20 +11,53 @@ from passlib.context import CryptContext
 from app.config import settings
 
 
+if not hasattr(bcrypt, "__about__"):
+    class _BcryptAbout:
+        """Compatibility shim for passlib with modern bcrypt versions."""
+
+        __version__ = getattr(bcrypt, "__version__", "")
+
+    bcrypt.__about__ = _BcryptAbout()  # type: ignore[attr-defined]
+
+
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 bearer_scheme = HTTPBearer(auto_error=False)
+
+
+def _hash_with_bcrypt_backend(password: str) -> str:
+    """Hash password using bcrypt library directly."""
+
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+
+def _verify_with_bcrypt_backend(plain_password: str, password_hash: str) -> bool:
+    """Verify password using bcrypt library directly."""
+
+    try:
+        return bcrypt.checkpw(
+            plain_password.encode("utf-8"),
+            password_hash.encode("utf-8"),
+        )
+    except ValueError:
+        return False
 
 
 def hash_password(password: str) -> str:
     """Hash a plain password for private workspaces."""
 
-    return pwd_context.hash(password)
+    try:
+        return pwd_context.hash(password)
+    except Exception:
+        return _hash_with_bcrypt_backend(password)
 
 
 def verify_password(plain_password: str, password_hash: str) -> bool:
     """Check a plain password against a stored hash."""
 
-    return pwd_context.verify(plain_password, password_hash)
+    try:
+        return pwd_context.verify(plain_password, password_hash)
+    except Exception:
+        return _verify_with_bcrypt_backend(plain_password, password_hash)
 
 
 def create_workspace_token(workspace_id: str) -> str:
