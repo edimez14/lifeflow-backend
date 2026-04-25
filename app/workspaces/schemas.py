@@ -45,3 +45,16 @@ class WorkspaceResponse(BaseModel):
     icon: str
     created_at: datetime
     updated_at: datetime
+
+
+class WorkspaceAuthRequest(BaseModel):
+    """Data used to authenticate a workspace."""
+
+    password: Optional[str] = None
+
+
+class WorkspaceAuthResponse(BaseModel):
+    """Token returned after a successful workspace authentication."""
+
+    access_token: str
+    token_type: str = "bearer"

@@ -3,8 +3,11 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.security import create_workspace_token, verify_password
 from app.database import get_db
 from app.workspaces.schemas import (
+    WorkspaceAuthRequest,
+    WorkspaceAuthResponse,
     WorkspaceCreate,
     WorkspaceResponse,
     WorkspaceUpdate,
@@ -16,6 +19,7 @@ from app.workspaces.service import (
     list_workspaces,
     update_workspace,
 )
+from app.workspaces.types import WorkspaceType
 
 
 router = APIRouter(prefix="/workspaces", tags=["workspaces"])
@@ -83,3 +87,38 @@ async def delete_workspace_view(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Workspace not found")
     await delete_workspace(db, workspace)
+
+
+@router.post("/{workspace_id}/auth", response_model=WorkspaceAuthResponse)
+async def auth_workspace(
+    workspace_id: str,
+    payload: WorkspaceAuthRequest,
+    db: AsyncSession = Depends(get_db),
+) -> WorkspaceAuthResponse:
+    """Authenticate a workspace and return a session token."""
+
+    workspace = await get_workspace_by_id(db, workspace_id)
+    if workspace is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Workspace not found",
+        )
+
+    if workspace.workspace_type == WorkspaceType.PUBLIC:
+        token = create_workspace_token(workspace.id)
+        return WorkspaceAuthResponse(access_token=token)
+
+    if not workspace.password_hash:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid workspace password",
+        )
+
+    if not payload.password or not verify_password(payload.password, workspace.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid workspace password",
+        )
+
+    token = create_workspace_token(workspace.id)
+    return WorkspaceAuthResponse(access_token=token)
