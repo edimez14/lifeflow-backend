@@ -3,7 +3,11 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.security import create_workspace_token, verify_password
+from app.core.security import (
+    create_workspace_token,
+    require_workspace_auth,
+    verify_password,
+)
 from app.database import get_db
 from app.workspaces.schemas import (
     WorkspaceAuthRequest,
@@ -65,6 +69,7 @@ async def update_workspace_view(
     workspace_id: str,
     payload: WorkspaceUpdate,
     db: AsyncSession = Depends(get_db),
+    _: str = Depends(require_workspace_auth),
 ) -> WorkspaceResponse:
     """Update one workspace."""
 
@@ -79,6 +84,7 @@ async def update_workspace_view(
 async def delete_workspace_view(
     workspace_id: str,
     db: AsyncSession = Depends(get_db),
+    _: str = Depends(require_workspace_auth),
 ) -> None:
     """Delete one workspace."""
 
