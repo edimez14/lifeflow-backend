@@ -10,10 +10,12 @@ from app.tasks.schemas import (
     SubTaskCreate,
     SubTaskResponse,
     SubTaskUpdate,
+    TaskCompletionResponse,
     TaskCreate,
     TaskListCreate,
     TaskListResponse,
     TaskListUpdate,
+    TaskReorderRequest,
     TaskResponse,
     TaskUpdate,
 )
@@ -26,10 +28,12 @@ from app.tasks.service import (
     delete_task_list,
     get_subtask_by_id,
     get_task_by_id,
+    get_task_completion,
     get_task_list_by_id,
     list_subtasks,
     list_task_lists,
     list_tasks,
+    reorder_tasks,
     update_subtask,
     update_task,
     update_task_list,
@@ -203,6 +207,49 @@ async def delete_task_view(
             detail="Task not found",
         )
     await delete_task(db, task)
+
+
+@router.patch(
+    "/workspaces/{workspace_id}/task-lists/{task_list_id}/tasks/reorder",
+    response_model=list[TaskResponse],
+)
+async def reorder_tasks_view(
+    workspace_id: str,
+    task_list_id: str,
+    payload: TaskReorderRequest,
+    db: AsyncSession = Depends(get_db),
+) -> list[TaskResponse]:
+    """Reorder tasks inside a list."""
+
+    try:
+        tasks = await reorder_tasks(db, workspace_id, task_list_id, payload)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+    return [TaskResponse.model_validate(task) for task in tasks]
+
+
+@router.get(
+    "/workspaces/{workspace_id}/tasks/{task_id}/completion",
+    response_model=TaskCompletionResponse,
+)
+async def get_task_completion_view(
+    workspace_id: str,
+    task_id: str,
+    db: AsyncSession = Depends(get_db),
+) -> TaskCompletionResponse:
+    """Return completion percentage for a task based on subtasks."""
+
+    try:
+        stats = await get_task_completion(db, workspace_id, task_id)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+    return TaskCompletionResponse(**stats)
 
 
 # ---------- SubTasks ----------

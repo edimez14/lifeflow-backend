@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date, time
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 from app.tasks.types import TaskPriority, TaskStatus
 
@@ -80,6 +80,28 @@ class TaskResponse(TaskBase):
     id: str
     task_list_id: str
     project_id: str | None
+
+
+class TaskReorderItem(BaseModel):
+    """Single item for reorder payload."""
+
+    id: str
+    order: int
+
+
+class TaskReorderRequest(BaseModel):
+    """Payload to reorder tasks inside a list."""
+
+    items: list[TaskReorderItem]
+
+
+class TaskCompletionResponse(BaseModel):
+    """Completion percentage for a task based on subtasks."""
+
+    task_id: str
+    total_subtasks: int
+    completed_subtasks: int
+    percentage: float
 
 
 # ---------- SubTask ----------
