@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.calendar.router import router as calendar_router
 from app.core.router import router as core_router
 from app.workspaces.router import router as workspaces_router
+from app.tasks.router import router as tasks_router
 from app.websocket_manager import get_connection_manager
 
 app = FastAPI(title="Lifeflow API", version="0.1.0")
@@ -21,6 +22,7 @@ app.add_middleware(
 app.include_router(core_router)
 app.include_router(workspaces_router)
 app.include_router(calendar_router)
+app.include_router(tasks_router)
 
 
 @app.get("/")
