@@ -9,6 +9,8 @@ from app.tasks.models import SubTask, Task, TaskCategory, TaskList
 from app.tasks.schemas import (
     SubTaskCreate,
     SubTaskUpdate,
+    TaskCategoryCreate,
+    TaskCategoryUpdate,
     TaskCreate,
     TaskUpdate,
     TaskListCreate,
@@ -174,7 +176,6 @@ async def reorder_tasks(
 ) -> list[Task]:
     """Update the order of multiple tasks in a single transaction."""
 
-    # Validate that all tasks belong to the given list and workspace
     task_ids = [item.id for item in payload.items]
     stmt = (
         select(Task)
@@ -191,7 +192,6 @@ async def reorder_tasks(
     if len(existing_tasks) != len(task_ids):
         raise ValueError("One or more tasks not found in the specified list")
 
-    # Build a mapping of id -> new order
     order_map = {item.id: item.order for item in payload.items}
 
     for task in existing_tasks:
@@ -199,7 +199,6 @@ async def reorder_tasks(
 
     await db.commit()
 
-    # Re-fetch in the new order
     new_result = await db.execute(
         select(Task)
         .where(Task.task_list_id == task_list_id)
@@ -213,7 +212,6 @@ async def get_task_completion(
 ) -> dict:
     """Return completion stats for a task based on its subtasks."""
 
-    # Verify task belongs to workspace
     task = await get_task_by_id(db, workspace_id, task_id)
     if task is None:
         raise ValueError("Task not found")
@@ -305,4 +303,67 @@ async def delete_subtask(db: AsyncSession, subtask: SubTask) -> None:
     """Delete a subtask."""
 
     await db.delete(subtask)
+    await db.commit()
+
+
+# ---------- TaskCategory ----------
+
+async def list_task_categories(
+    db: AsyncSession, workspace_id: str
+) -> list[TaskCategory]:
+    """Return all task categories for a workspace."""
+
+    result = await db.execute(
+        select(TaskCategory)
+        .where(TaskCategory.workspace_id == workspace_id)
+        .order_by(TaskCategory.name.asc())
+    )
+    return list(result.scalars().all())
+
+
+async def get_task_category_by_id(
+    db: AsyncSession, workspace_id: str, category_id: str
+) -> TaskCategory | None:
+    """Return one workspace category by id."""
+
+    result = await db.execute(
+        select(TaskCategory).where(
+            TaskCategory.workspace_id == workspace_id,
+            TaskCategory.id == category_id,
+        )
+    )
+    return result.scalar_one_or_none()
+
+
+async def create_task_category(
+    db: AsyncSession, workspace_id: str, payload: TaskCategoryCreate
+) -> TaskCategory:
+    """Create a new task category inside a workspace."""
+
+    category = TaskCategory(workspace_id=workspace_id, **payload.model_dump())
+    db.add(category)
+    await db.commit()
+    await db.refresh(category)
+    return category
+
+
+async def update_task_category(
+    db: AsyncSession, category: TaskCategory, payload: TaskCategoryUpdate
+) -> TaskCategory:
+    """Update an existing task category."""
+
+    update_data = payload.model_dump(exclude_unset=True)
+    for field_name, value in update_data.items():
+        setattr(category, field_name, value)
+    await db.commit()
+    await db.refresh(category)
+    return category
+
+
+async def delete_task_category(
+    db: AsyncSession, category: TaskCategory
+) -> None:
+    """Delete a task category. Related tasks will have category_id set to NULL."""
+
+    await db.delete(category)
     await db.commit()

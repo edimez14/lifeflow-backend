@@ -10,6 +10,9 @@ from app.tasks.schemas import (
     SubTaskCreate,
     SubTaskResponse,
     SubTaskUpdate,
+    TaskCategoryCreate,
+    TaskCategoryResponse,
+    TaskCategoryUpdate,
     TaskCompletionResponse,
     TaskCreate,
     TaskListCreate,
@@ -22,20 +25,25 @@ from app.tasks.schemas import (
 from app.tasks.service import (
     create_subtask,
     create_task,
+    create_task_category,
     create_task_list,
     delete_subtask,
     delete_task,
+    delete_task_category,
     delete_task_list,
     get_subtask_by_id,
     get_task_by_id,
+    get_task_category_by_id,
     get_task_completion,
     get_task_list_by_id,
     list_subtasks,
+    list_task_categories,
     list_task_lists,
     list_tasks,
     reorder_tasks,
     update_subtask,
     update_task,
+    update_task_category,
     update_task_list,
 )
 from app.tasks.types import TaskPriority, TaskStatus
@@ -334,3 +342,77 @@ async def delete_subtask_view(
             detail="Subtask not found",
         )
     await delete_subtask(db, subtask)
+
+
+# ---------- TaskCategories ----------
+
+@router.get(
+    "/workspaces/{workspace_id}/task-categories",
+    response_model=list[TaskCategoryResponse],
+)
+async def read_task_categories(
+    workspace_id: str,
+    db: AsyncSession = Depends(get_db),
+) -> list[TaskCategoryResponse]:
+    """List task categories for one workspace."""
+
+    categories = await list_task_categories(db, workspace_id)
+    return [TaskCategoryResponse.model_validate(cat) for cat in categories]
+
+
+@router.post(
+    "/workspaces/{workspace_id}/task-categories",
+    response_model=TaskCategoryResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_task_category_view(
+    workspace_id: str,
+    payload: TaskCategoryCreate,
+    db: AsyncSession = Depends(get_db),
+) -> TaskCategoryResponse:
+    """Create a new task category in a workspace."""
+
+    category = await create_task_category(db, workspace_id, payload)
+    return TaskCategoryResponse.model_validate(category)
+
+
+@router.put(
+    "/workspaces/{workspace_id}/task-categories/{category_id}",
+    response_model=TaskCategoryResponse,
+)
+async def update_task_category_view(
+    workspace_id: str,
+    category_id: str,
+    payload: TaskCategoryUpdate,
+    db: AsyncSession = Depends(get_db),
+) -> TaskCategoryResponse:
+    """Update one workspace task category."""
+
+    category = await get_task_category_by_id(db, workspace_id, category_id)
+    if category is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Category not found",
+        )
+    updated = await update_task_category(db, category, payload)
+    return TaskCategoryResponse.model_validate(updated)
+
+
+@router.delete(
+    "/workspaces/{workspace_id}/task-categories/{category_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_task_category_view(
+    workspace_id: str,
+    category_id: str,
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    """Delete one workspace task category. Tasks using it will lose the category."""
+
+    category = await get_task_category_by_id(db, workspace_id, category_id)
+    if category is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Category not found",
+        )
+    await delete_task_category(db, category)
