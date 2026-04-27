@@ -47,6 +47,7 @@ from app.tasks.service import (
     update_task_list,
 )
 from app.tasks.types import TaskPriority, TaskStatus
+from app.websocket_manager import ConnectionManager, get_connection_manager
 
 
 router = APIRouter(tags=["tasks"])
@@ -77,10 +78,16 @@ async def create_task_list_view(
     workspace_id: str,
     payload: TaskListCreate,
     db: AsyncSession = Depends(get_db),
+    manager: ConnectionManager = Depends(get_connection_manager),
 ) -> TaskListResponse:
     """Create a new task list in a workspace."""
 
     task_list = await create_task_list(db, workspace_id, payload)
+    await manager.broadcast(workspace_id, {
+        "type": "task_list.updated",
+        "action": "created",
+        "data": TaskListResponse.model_validate(task_list).model_dump(),
+    })
     return TaskListResponse.model_validate(task_list)
 
 
@@ -93,6 +100,7 @@ async def update_task_list_view(
     task_list_id: str,
     payload: TaskListUpdate,
     db: AsyncSession = Depends(get_db),
+    manager: ConnectionManager = Depends(get_connection_manager),
 ) -> TaskListResponse:
     """Update one workspace task list."""
 
@@ -103,6 +111,11 @@ async def update_task_list_view(
             detail="Task list not found",
         )
     updated = await update_task_list(db, task_list, payload)
+    await manager.broadcast(workspace_id, {
+        "type": "task_list.updated",
+        "action": "updated",
+        "data": TaskListResponse.model_validate(updated).model_dump(),
+    })
     return TaskListResponse.model_validate(updated)
 
 
@@ -114,6 +127,7 @@ async def delete_task_list_view(
     workspace_id: str,
     task_list_id: str,
     db: AsyncSession = Depends(get_db),
+    manager: ConnectionManager = Depends(get_connection_manager),
 ) -> None:
     """Delete one workspace task list."""
 
@@ -124,6 +138,11 @@ async def delete_task_list_view(
             detail="Task list not found",
         )
     await delete_task_list(db, task_list)
+    await manager.broadcast(workspace_id, {
+        "type": "task_list.updated",
+        "action": "deleted",
+        "data": {"id": task_list_id},
+    })
 
 
 # ---------- Tasks ----------
@@ -162,6 +181,7 @@ async def create_task_view(
     workspace_id: str,
     payload: TaskCreate,
     db: AsyncSession = Depends(get_db),
+    manager: ConnectionManager = Depends(get_connection_manager),
 ) -> TaskResponse:
     """Create one task in a workspace."""
 
@@ -172,6 +192,11 @@ async def create_task_view(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(exc),
         ) from exc
+    await manager.broadcast(workspace_id, {
+        "type": "task.updated",
+        "action": "created",
+        "data": TaskResponse.model_validate(task).model_dump(),
+    })
     return TaskResponse.model_validate(task)
 
 
@@ -184,6 +209,7 @@ async def update_task_view(
     task_id: str,
     payload: TaskUpdate,
     db: AsyncSession = Depends(get_db),
+    manager: ConnectionManager = Depends(get_connection_manager),
 ) -> TaskResponse:
     """Update one workspace task."""
 
@@ -194,6 +220,11 @@ async def update_task_view(
             detail="Task not found",
         )
     updated = await update_task(db, task, payload)
+    await manager.broadcast(workspace_id, {
+        "type": "task.updated",
+        "action": "updated",
+        "data": TaskResponse.model_validate(updated).model_dump(),
+    })
     return TaskResponse.model_validate(updated)
 
 
@@ -205,6 +236,7 @@ async def delete_task_view(
     workspace_id: str,
     task_id: str,
     db: AsyncSession = Depends(get_db),
+    manager: ConnectionManager = Depends(get_connection_manager),
 ) -> None:
     """Delete one workspace task."""
 
@@ -215,6 +247,11 @@ async def delete_task_view(
             detail="Task not found",
         )
     await delete_task(db, task)
+    await manager.broadcast(workspace_id, {
+        "type": "task.updated",
+        "action": "deleted",
+        "data": {"id": task_id},
+    })
 
 
 @router.patch(
@@ -226,6 +263,7 @@ async def reorder_tasks_view(
     task_list_id: str,
     payload: TaskReorderRequest,
     db: AsyncSession = Depends(get_db),
+    manager: ConnectionManager = Depends(get_connection_manager),
 ) -> list[TaskResponse]:
     """Reorder tasks inside a list."""
 
@@ -236,6 +274,11 @@ async def reorder_tasks_view(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(exc),
         ) from exc
+    await manager.broadcast(workspace_id, {
+        "type": "task.updated",
+        "action": "reordered",
+        "data": [TaskResponse.model_validate(task).model_dump() for task in tasks],
+    })
     return [TaskResponse.model_validate(task) for task in tasks]
 
 
@@ -287,6 +330,7 @@ async def create_subtask_view(
     task_id: str,
     payload: SubTaskCreate,
     db: AsyncSession = Depends(get_db),
+    manager: ConnectionManager = Depends(get_connection_manager),
 ) -> SubTaskResponse:
     """Create a new subtask for a task."""
 
@@ -297,6 +341,11 @@ async def create_subtask_view(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(exc),
         ) from exc
+    await manager.broadcast(workspace_id, {
+        "type": "task.updated",
+        "action": "subtask_created",
+        "data": {"task_id": task_id, "subtask": SubTaskResponse.model_validate(subtask).model_dump()},
+    })
     return SubTaskResponse.model_validate(subtask)
 
 
@@ -310,6 +359,7 @@ async def update_subtask_view(
     subtask_id: str,
     payload: SubTaskUpdate,
     db: AsyncSession = Depends(get_db),
+    manager: ConnectionManager = Depends(get_connection_manager),
 ) -> SubTaskResponse:
     """Update one subtask."""
 
@@ -320,6 +370,11 @@ async def update_subtask_view(
             detail="Subtask not found",
         )
     updated = await update_subtask(db, subtask, payload)
+    await manager.broadcast(workspace_id, {
+        "type": "task.updated",
+        "action": "subtask_updated",
+        "data": {"task_id": task_id, "subtask": SubTaskResponse.model_validate(updated).model_dump()},
+    })
     return SubTaskResponse.model_validate(updated)
 
 
@@ -332,6 +387,7 @@ async def delete_subtask_view(
     task_id: str,
     subtask_id: str,
     db: AsyncSession = Depends(get_db),
+    manager: ConnectionManager = Depends(get_connection_manager),
 ) -> None:
     """Delete one subtask."""
 
@@ -342,6 +398,11 @@ async def delete_subtask_view(
             detail="Subtask not found",
         )
     await delete_subtask(db, subtask)
+    await manager.broadcast(workspace_id, {
+        "type": "task.updated",
+        "action": "subtask_deleted",
+        "data": {"task_id": task_id, "subtask_id": subtask_id},
+    })
 
 
 # ---------- TaskCategories ----------
@@ -369,10 +430,16 @@ async def create_task_category_view(
     workspace_id: str,
     payload: TaskCategoryCreate,
     db: AsyncSession = Depends(get_db),
+    manager: ConnectionManager = Depends(get_connection_manager),
 ) -> TaskCategoryResponse:
     """Create a new task category in a workspace."""
 
     category = await create_task_category(db, workspace_id, payload)
+    await manager.broadcast(workspace_id, {
+        "type": "task_category.updated",
+        "action": "created",
+        "data": TaskCategoryResponse.model_validate(category).model_dump(),
+    })
     return TaskCategoryResponse.model_validate(category)
 
 
@@ -385,6 +452,7 @@ async def update_task_category_view(
     category_id: str,
     payload: TaskCategoryUpdate,
     db: AsyncSession = Depends(get_db),
+    manager: ConnectionManager = Depends(get_connection_manager),
 ) -> TaskCategoryResponse:
     """Update one workspace task category."""
 
@@ -395,6 +463,11 @@ async def update_task_category_view(
             detail="Category not found",
         )
     updated = await update_task_category(db, category, payload)
+    await manager.broadcast(workspace_id, {
+        "type": "task_category.updated",
+        "action": "updated",
+        "data": TaskCategoryResponse.model_validate(updated).model_dump(),
+    })
     return TaskCategoryResponse.model_validate(updated)
 
 
@@ -406,6 +479,7 @@ async def delete_task_category_view(
     workspace_id: str,
     category_id: str,
     db: AsyncSession = Depends(get_db),
+    manager: ConnectionManager = Depends(get_connection_manager),
 ) -> None:
     """Delete one workspace task category. Tasks using it will lose the category."""
 
@@ -416,3 +490,8 @@ async def delete_task_category_view(
             detail="Category not found",
         )
     await delete_task_category(db, category)
+    await manager.broadcast(workspace_id, {
+        "type": "task_category.updated",
+        "action": "deleted",
+        "data": {"id": category_id},
+    })
