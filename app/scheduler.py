@@ -67,23 +67,34 @@ async def _finish_timer_job(timer_id: str, workspace_id: str, task_id: str | Non
     """Execute when the timer reaches its deadline."""
 
     from app.database import AsyncSessionLocal
+    from app.notifications.service import dispatch_notification
     from app.timer.service import complete_timer
 
     async with AsyncSessionLocal() as db:
         timer = await complete_timer(db, timer_id, workspace_id)
         if timer is not None:
             manager = get_connection_manager()
+
+            payload = {
+                "timer_id": timer_id,
+                "task_id": task_id,
+                "workspace_id": workspace_id,
+                "actual_seconds": timer.actual_seconds,
+                "estimated_seconds": timer.estimated_seconds,
+            }
+
             await manager.broadcast(
                 workspace_id,
                 {
                     "type": "timer.finished",
-                    "data": {
-                        "timer_id": timer_id,
-                        "task_id": task_id,
-                        "workspace_id": workspace_id,
-                        "actual_seconds": timer.actual_seconds,
-                    },
+                    "data": payload,
                 },
+            )
+
+            await dispatch_notification(
+                workspace_id=workspace_id,
+                notification_type="timer.finished",
+                payload=payload,
             )
 
     await _pause_tick_if_no_timers()
