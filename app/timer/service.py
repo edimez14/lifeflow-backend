@@ -11,6 +11,13 @@ from app.timer.schemas import TimerStartRequest
 from app.timer.types import TimerStatus
 
 
+def _ensure_aware(dt: datetime) -> datetime:
+    """Ensure datetime is timezone-aware (UTC if naive)."""
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=UTC)
+    return dt
+
+
 async def start_timer(
     db: AsyncSession, workspace_id: str, payload: TimerStartRequest
 ) -> TimerSession:
@@ -48,7 +55,8 @@ async def pause_timer(
 
     timer = await _get_active_timer(db, workspace_id, timer_id, TimerStatus.RUNNING)
     now = datetime.now(UTC)
-    elapsed = (now - timer.started_at).total_seconds()
+    started_at = _ensure_aware(timer.started_at)
+    elapsed = (now - started_at).total_seconds()
     timer.actual_seconds = int(elapsed)
     timer.status = TimerStatus.PAUSED
     timer.paused_at = now
@@ -101,7 +109,8 @@ async def cancel_timer(
     now = datetime.now(UTC)
 
     if timer.status == TimerStatus.RUNNING:
-        elapsed = (now - timer.started_at).total_seconds()
+        started_at = _ensure_aware(timer.started_at)
+        elapsed = (now - started_at).total_seconds()
         timer.actual_seconds = int(elapsed)
 
     timer.status = TimerStatus.CANCELLED
@@ -126,7 +135,9 @@ async def complete_timer(
     timer.status = TimerStatus.COMPLETED
     timer.finished_at = datetime.now(UTC)
 
-    elapsed = (timer.finished_at - timer.started_at).total_seconds()
+    started_at = _ensure_aware(timer.started_at)
+    finished_at = _ensure_aware(timer.finished_at)
+    elapsed = (finished_at - started_at).total_seconds()
     timer.actual_seconds = int(elapsed)
 
     await db.commit()
