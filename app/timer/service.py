@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.scheduler import remove_timer_job, schedule_timer_finish
 from app.timer.models import TimerSession
 from app.timer.schemas import TimerStartRequest
 from app.timer.types import TimerStatus
@@ -13,7 +14,7 @@ from app.timer.types import TimerStatus
 async def start_timer(
     db: AsyncSession, workspace_id: str, payload: TimerStartRequest
 ) -> TimerSession:
-    """Create and return a new timer session in running state."""
+    """Create a new timer session and schedule its finish job."""
 
     now = datetime.now(UTC)
     timer = TimerSession(
@@ -27,13 +28,23 @@ async def start_timer(
     db.add(timer)
     await db.commit()
     await db.refresh(timer)
+
+    if timer.estimated_seconds > 0:
+        finish_at = now + timedelta(seconds=timer.estimated_seconds)
+        await schedule_timer_finish(
+            timer_id=timer.id,
+            workspace_id=workspace_id,
+            run_at=finish_at,
+            task_id=payload.task_id,
+        )
+
     return timer
 
 
 async def pause_timer(
     db: AsyncSession, workspace_id: str, timer_id: str
 ) -> TimerSession:
-    """Pause a running timer and record the pause timestamp."""
+    """Pause a running timer and cancel its APScheduler job."""
 
     timer = await _get_active_timer(db, workspace_id, timer_id, TimerStatus.RUNNING)
     now = datetime.now(UTC)
@@ -43,13 +54,16 @@ async def pause_timer(
     timer.paused_at = now
     await db.commit()
     await db.refresh(timer)
+
+    await remove_timer_job(timer_id)
+
     return timer
 
 
 async def resume_timer(
     db: AsyncSession, workspace_id: str, timer_id: str
 ) -> TimerSession:
-    """Resume a paused timer and recalculate remaining time."""
+    """Resume a paused timer and schedule a new finish job."""
 
     timer = await _get_active_timer(db, workspace_id, timer_id, TimerStatus.PAUSED)
     now = datetime.now(UTC)
@@ -62,13 +76,23 @@ async def resume_timer(
     timer.actual_seconds = elapsed_before_pause
     await db.commit()
     await db.refresh(timer)
+
+    if remaining > 0:
+        finish_at = now + timedelta(seconds=remaining)
+        await schedule_timer_finish(
+            timer_id=timer.id,
+            workspace_id=workspace_id,
+            run_at=finish_at,
+            task_id=timer.task_id,
+        )
+
     return timer
 
 
 async def cancel_timer(
     db: AsyncSession, workspace_id: str, timer_id: str
 ) -> TimerSession:
-    """Cancel a running or paused timer."""
+    """Cancel a running or paused timer and remove its APS job."""
 
     timer = await _get_active_timer(
         db, workspace_id, timer_id,
@@ -84,18 +108,27 @@ async def cancel_timer(
     timer.finished_at = now
     await db.commit()
     await db.refresh(timer)
+
+    await remove_timer_job(timer_id)
+
     return timer
 
 
 async def complete_timer(
-    db: AsyncSession, timer: TimerSession
+    db: AsyncSession, timer_id: str, workspace_id: str
 ) -> TimerSession:
     """Mark a timer as completed (called by APScheduler job)."""
 
+    timer = await get_timer_by_id(db, workspace_id, timer_id)
+    if timer is None or timer.status != TimerStatus.RUNNING:
+        return None
+
     timer.status = TimerStatus.COMPLETED
     timer.finished_at = datetime.now(UTC)
-    if timer.actual_seconds == 0:
-        timer.actual_seconds = timer.estimated_seconds
+
+    elapsed = (timer.finished_at - timer.started_at).total_seconds()
+    timer.actual_seconds = int(elapsed)
+
     await db.commit()
     await db.refresh(timer)
     return timer
@@ -118,7 +151,7 @@ async def get_timer_by_id(
 async def get_timer_history(
     db: AsyncSession, workspace_id: str, task_id: str
 ) -> list[TimerSession]:
-    """Return all completed timer sessions for a given task."""
+    """Return all timer sessions for a given task."""
 
     result = await db.execute(
         select(TimerSession)
@@ -134,9 +167,10 @@ async def get_timer_history(
 async def get_running_timers(
     db: AsyncSession, workspace_id: str | None = None
 ) -> list[TimerSession]:
-    """Return all timers currently in running state, optionally filtered by workspace."""
+    """Return all timers currently in running state."""
 
-    query = select(TimerSession).where(TimerSession.status == TimerStatus.RUNNING)
+    query = select(TimerSession).where(
+        TimerSession.status == TimerStatus.RUNNING)
 
     if workspace_id:
         query = query.where(TimerSession.workspace_id == workspace_id)

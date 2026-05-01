@@ -1,8 +1,7 @@
 from __future__ import annotations
-
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-
 from app.calendar.router import router as calendar_router
 from app.core.router import router as core_router
 from app.workspaces.router import router as workspaces_router
@@ -10,7 +9,18 @@ from app.tasks.router import router as tasks_router
 from app.timer.router import router as timer_router
 from app.websocket_manager import get_connection_manager
 
-app = FastAPI(title="Lifeflow API", version="0.1.0")
+
+@asynccontextmanager
+async def lifespan(application: FastAPI):
+    """Start and shut down the APScheduler on app lifecycle."""
+
+    from app.scheduler import get_scheduler
+
+    scheduler = get_scheduler()
+    scheduler.start()
+    yield
+    scheduler.shutdown(wait=False)
+app = FastAPI(title="Lifeflow API", version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
