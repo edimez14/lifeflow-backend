@@ -2,11 +2,31 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from enum import Enum
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Enum as SAEnum, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.models import Base
+
+
+class EventCategory(str, Enum):
+    """Categories para organizar eventos."""
+    IMPORTANTE = "importante"
+    URGENTE = "urgente"
+    ESPECIAL = "especial"
+    REPETITIVO = "repetitivo"
+    SOLO_UNA_VEZ = "solo_una_vez"
+
+
+# Map de colores por categoria
+CATEGORY_COLORS = {
+    EventCategory.IMPORTANTE: "#FF9800",     # naranja
+    EventCategory.URGENTE: "#F44336",        # rojo
+    EventCategory.ESPECIAL: "#9C27B0",       # morado
+    EventCategory.REPETITIVO: "#2196F3",     # azul
+    EventCategory.SOLO_UNA_VEZ: "#4CAF50",   # verde
+}
 
 
 class Calendar(Base):

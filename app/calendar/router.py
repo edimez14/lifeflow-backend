@@ -5,10 +5,12 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.calendar.models import CATEGORY_COLORS
 from app.calendar.schemas import (
     CalendarCreate,
     CalendarResponse,
     CalendarUpdate,
+    EventCategory,
     EventCreate,
     EventResponse,
     EventUpdate,
@@ -34,6 +36,19 @@ from app.websocket_manager import ConnectionManager, get_connection_manager
 
 
 router = APIRouter(tags=["calendar"])
+
+
+@router.get("/event-categories")
+async def read_event_categories() -> list[dict]:
+    """Lista las categorias disponibles para eventos con sus colores."""
+    return [
+        {
+            "value": cat.value,
+            "label": cat.name.replace("_", " ").title(),
+            "color": CATEGORY_COLORS[cat],
+        }
+        for cat in EventCategory
+    ]
 
 
 @router.get("/workspaces/{workspace_id}/calendars", response_model=list[CalendarResponse])

@@ -1,8 +1,18 @@
 from __future__ import annotations
 
 from datetime import datetime
+from enum import Enum
 
 from pydantic import BaseModel, ConfigDict
+
+
+class EventCategory(str, Enum):
+    """Categorias disponibles para eventos."""
+    IMPORTANTE = "importante"
+    URGENTE = "urgente"
+    ESPECIAL = "especial"
+    REPETITIVO = "repetitivo"
+    SOLO_UNA_VEZ = "solo_una_vez"
 
 
 class CalendarBase(BaseModel):
