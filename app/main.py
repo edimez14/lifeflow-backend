@@ -1,4 +1,5 @@
 from __future__ import annotations
+import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,11 +21,16 @@ async def lifespan(application: FastAPI):
     scheduler.start()
     yield
     scheduler.shutdown(wait=False)
+
+
+# Read allowed origins from env; default to local dev.
+_cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:8000").split(",")
+
 app = FastAPI(title="Lifeflow API", version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[o.strip() for o in _cors_origins if o.strip()],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
