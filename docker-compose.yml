@@ -1,8 +1,0 @@
-services:
-  sqlite3:
-    image: keinos/sqlite3:latest
-    container_name: lifeflow_sqlite
-    command: tail -f /dev/null
-    volumes:
-      - ./data:/data
-    working_dir: /data
