@@ -22,11 +22,13 @@ from app.calendar.service import (
     create_event,
     delete_calendar,
     delete_event,
+    delete_monthly_goal as delete_monthly_goal_service,
     get_calendar_by_id,
     get_event_by_id,
     get_monthly_goal,
     list_calendars,
     list_events,
+    list_monthly_goals as list_monthly_goals_service,
     update_calendar,
     update_event,
     upsert_monthly_goal,
@@ -206,6 +208,19 @@ async def delete_event_view(
 # ---------- Monthly Goals ----------
 
 @router.get(
+    "/workspaces/{workspace_id}/monthly-goals/",
+    response_model=list[MonthlyGoalResponse],
+)
+async def list_monthly_goals(
+    workspace_id: str,
+    db: AsyncSession = Depends(get_db),
+) -> list[MonthlyGoalResponse]:
+    """List all monthly goals for a workspace."""
+    goals = await list_monthly_goals_service(db, workspace_id)
+    return [MonthlyGoalResponse.model_validate(g) for g in goals]
+
+
+@router.get(
     "/workspaces/{workspace_id}/monthly-goals/{year}/{month}",
     response_model=MonthlyGoalResponse,
 )
@@ -244,3 +259,22 @@ async def put_monthly_goal(
 
     goal = await upsert_monthly_goal(db, workspace_id, year, month, payload)
     return MonthlyGoalResponse.model_validate(goal)
+
+
+@router.delete(
+    "/workspaces/{workspace_id}/monthly-goals/{year}/{month}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def remove_monthly_goal(
+    workspace_id: str,
+    year: int,
+    month: int,
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    """Delete a monthly goal."""
+    deleted = await delete_monthly_goal_service(db, workspace_id, year, month)
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Monthly goal not found",
+        )

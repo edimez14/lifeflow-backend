@@ -298,3 +298,31 @@ async def upsert_monthly_goal(
     await db.commit()
     await db.refresh(new_goal)
     return new_goal
+
+
+async def list_monthly_goals(
+    db: AsyncSession,
+    workspace_id: str,
+) -> list[MonthlyGoal]:
+    """Return all monthly goals for a workspace, ordered by year desc, month desc."""
+    result = await db.execute(
+        select(MonthlyGoal)
+        .where(MonthlyGoal.workspace_id == workspace_id)
+        .order_by(MonthlyGoal.year.desc(), MonthlyGoal.month.desc())
+    )
+    return list(result.scalars().all())
+
+
+async def delete_monthly_goal(
+    db: AsyncSession,
+    workspace_id: str,
+    year: int,
+    month: int,
+) -> bool:
+    """Delete a monthly goal. Returns True if deleted, False if not found."""
+    goal = await get_monthly_goal(db, workspace_id, year, month)
+    if goal is None:
+        return False
+    await db.delete(goal)
+    await db.commit()
+    return True
