@@ -99,7 +99,14 @@ class MonthlyGoalBase(BaseModel):
 
 
 class MonthlyGoalCreate(MonthlyGoalBase):
-    """Data used to create or update a monthly goal."""
+    """Data used to create a monthly goal."""
+
+
+class MonthlyGoalUpdate(BaseModel):
+    """Data used to update an existing monthly goal (by id)."""
+
+    goal_text: str
+    action_plan: str
 
 
 class MonthlyGoalResponse(MonthlyGoalBase):

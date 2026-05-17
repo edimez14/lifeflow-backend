@@ -15,6 +15,7 @@ from app.calendar.schemas import (
     EventUpdate,
     MonthlyGoalCreate,
     MonthlyGoalResponse,
+    MonthlyGoalUpdate,
 )
 
 
@@ -252,45 +253,16 @@ async def list_events(
 
 # ---------- Monthly Goals ----------
 
-async def get_monthly_goal(
+async def create_monthly_goal(
     db: AsyncSession,
     workspace_id: str,
-    year: int,
-    month: int,
-) -> MonthlyGoal | None:
-    """Return the monthly goal for a given workspace, year, and month."""
-
-    result = await db.execute(
-        select(MonthlyGoal).where(
-            MonthlyGoal.workspace_id == workspace_id,
-            MonthlyGoal.year == year,
-            MonthlyGoal.month == month,
-        )
-    )
-    return result.scalar_one_or_none()
-
-
-async def upsert_monthly_goal(
-    db: AsyncSession,
-    workspace_id: str,
-    year: int,
-    month: int,
     payload: MonthlyGoalCreate,
 ) -> MonthlyGoal:
-    """Create or update the monthly goal for a workspace and month."""
-
-    existing = await get_monthly_goal(db, workspace_id, year, month)
-    if existing is not None:
-        existing.goal_text = payload.goal_text
-        existing.action_plan = payload.action_plan
-        await db.commit()
-        await db.refresh(existing)
-        return existing
-
+    """Always create a new monthly goal row (supports multiple per month)."""
     new_goal = MonthlyGoal(
         workspace_id=workspace_id,
-        year=year,
-        month=month,
+        year=payload.year,
+        month=payload.month,
         goal_text=payload.goal_text,
         action_plan=payload.action_plan,
     )
@@ -298,6 +270,50 @@ async def upsert_monthly_goal(
     await db.commit()
     await db.refresh(new_goal)
     return new_goal
+
+
+async def get_monthly_goals_for_month(
+    db: AsyncSession,
+    workspace_id: str,
+    year: int,
+    month: int,
+) -> list[MonthlyGoal]:
+    """Return all monthly goals for a given workspace, year, and month."""
+    result = await db.execute(
+        select(MonthlyGoal).where(
+            MonthlyGoal.workspace_id == workspace_id,
+            MonthlyGoal.year == year,
+            MonthlyGoal.month == month,
+        ).order_by(MonthlyGoal.goal_text)
+    )
+    return list(result.scalars().all())
+
+
+async def get_monthly_goal_by_id(
+    db: AsyncSession,
+    goal_id: str,
+) -> MonthlyGoal | None:
+    """Return a single monthly goal by its UUID."""
+    result = await db.execute(
+        select(MonthlyGoal).where(MonthlyGoal.id == goal_id)
+    )
+    return result.scalar_one_or_none()
+
+
+async def update_monthly_goal(
+    db: AsyncSession,
+    goal_id: str,
+    payload: MonthlyGoalUpdate,
+) -> MonthlyGoal | None:
+    """Update an existing monthly goal text and action plan. Returns None if not found."""
+    goal = await get_monthly_goal_by_id(db, goal_id)
+    if goal is None:
+        return None
+    goal.goal_text = payload.goal_text
+    goal.action_plan = payload.action_plan
+    await db.commit()
+    await db.refresh(goal)
+    return goal
 
 
 async def list_monthly_goals(
@@ -315,12 +331,10 @@ async def list_monthly_goals(
 
 async def delete_monthly_goal(
     db: AsyncSession,
-    workspace_id: str,
-    year: int,
-    month: int,
+    goal_id: str,
 ) -> bool:
-    """Delete a monthly goal. Returns True if deleted, False if not found."""
-    goal = await get_monthly_goal(db, workspace_id, year, month)
+    """Delete a monthly goal by id. Returns True if deleted, False if not found."""
+    goal = await get_monthly_goal_by_id(db, goal_id)
     if goal is None:
         return False
     await db.delete(goal)
