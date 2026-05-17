@@ -154,14 +154,20 @@ async def _tick_job() -> None:
 
     workspace_groups: dict[str, list[dict]] = {}
     for timer in timers:
-        elapsed = (now - timer.started_at).total_seconds()
-        remaining = max(0, timer.estimated_seconds - int(elapsed))
+        started_at = timer.started_at
+        if started_at.tzinfo is None:
+            started_at = started_at.replace(tzinfo=UTC)
+        # actual_seconds = accumulated active time from before any pauses;
+        # current segment = time since the last start/resume
+        segment_elapsed = (now - started_at).total_seconds()
+        total_elapsed = timer.actual_seconds + int(segment_elapsed)
+        remaining = max(0, timer.estimated_seconds - total_elapsed)
 
         workspace_groups.setdefault(timer.workspace_id, []).append({
             "timer_id": timer.id,
             "task_id": timer.task_id,
             "remaining_seconds": remaining,
-            "elapsed_seconds": int(elapsed),
+            "elapsed_seconds": total_elapsed,
             "estimated_seconds": timer.estimated_seconds,
         })
 

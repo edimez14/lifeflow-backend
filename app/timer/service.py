@@ -57,7 +57,8 @@ async def pause_timer(
     now = datetime.now(UTC)
     started_at = _ensure_aware(timer.started_at)
     elapsed = (now - started_at).total_seconds()
-    timer.actual_seconds = int(elapsed)
+    # Accumulate: actual_seconds already holds time from before any previous pauses
+    timer.actual_seconds += int(elapsed)
     timer.status = TimerStatus.PAUSED
     timer.paused_at = now
     await db.commit()
@@ -82,6 +83,9 @@ async def resume_timer(
     timer.status = TimerStatus.RUNNING
     timer.paused_at = None
     timer.actual_seconds = elapsed_before_pause
+    # Reset started_at so the tick job only counts time from this resume point;
+    # actual_seconds already holds the accumulated time before the pause.
+    timer.started_at = now
     await db.commit()
     await db.refresh(timer)
 
@@ -111,7 +115,8 @@ async def cancel_timer(
     if timer.status == TimerStatus.RUNNING:
         started_at = _ensure_aware(timer.started_at)
         elapsed = (now - started_at).total_seconds()
-        timer.actual_seconds = int(elapsed)
+        # Accumulate: actual_seconds already holds time from before any pauses
+        timer.actual_seconds += int(elapsed)
 
     timer.status = TimerStatus.CANCELLED
     timer.finished_at = now
@@ -138,7 +143,8 @@ async def complete_timer(
     started_at = _ensure_aware(timer.started_at)
     finished_at = _ensure_aware(timer.finished_at)
     elapsed = (finished_at - started_at).total_seconds()
-    timer.actual_seconds = int(elapsed)
+    # Accumulate: actual_seconds already holds time from before any pauses
+    timer.actual_seconds += int(elapsed)
 
     await db.commit()
     await db.refresh(timer)
