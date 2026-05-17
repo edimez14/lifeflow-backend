@@ -70,6 +70,7 @@ class TaskUpdate(BaseModel):
     order: int | None = None
     category_id: str | None = None
     project_id: str | None = None
+    task_list_id: str | None = None
 
 
 class TaskResponse(TaskBase):
