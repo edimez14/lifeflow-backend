@@ -11,7 +11,6 @@ class TimerStartRequest(BaseModel):
     """Data to start a new timer session."""
 
     task_id: str | None = None
-    workspace_id: str | None = None
     estimated_seconds: int = 0
 
 

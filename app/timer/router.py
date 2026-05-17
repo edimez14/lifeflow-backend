@@ -24,26 +24,21 @@ router = APIRouter(tags=["timer"])
 
 
 @router.post(
-    "/timers/start",
+    "/workspaces/{workspace_id}/timers/start",
     response_model=TimerResponse,
     status_code=status.HTTP_201_CREATED,
 )
 async def start_timer_view(
+    workspace_id: str,
     payload: TimerStartRequest,
     db: AsyncSession = Depends(get_db),
     manager: ConnectionManager = Depends(get_connection_manager),
 ) -> TimerResponse:
     """Start a new timer session for the user's workspace."""
 
-    if not payload.workspace_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="workspace_id is required",
-        )
+    timer = await start_timer(db, workspace_id, payload)
 
-    timer = await start_timer(db, payload.workspace_id, payload)
-
-    await manager.broadcast(payload.workspace_id, {
+    await manager.broadcast(workspace_id, {
         "type": "timer.started",
         "data": TimerResponse.model_validate(timer).model_dump(),
     })
@@ -52,12 +47,12 @@ async def start_timer_view(
 
 
 @router.post(
-    "/timers/{timer_id}/pause",
+    "/workspaces/{workspace_id}/timers/{timer_id}/pause",
     response_model=TimerResponse,
 )
 async def pause_timer_view(
-    timer_id: str,
     workspace_id: str,
+    timer_id: str,
     db: AsyncSession = Depends(get_db),
     manager: ConnectionManager = Depends(get_connection_manager),
 ) -> TimerResponse:
@@ -80,12 +75,12 @@ async def pause_timer_view(
 
 
 @router.post(
-    "/timers/{timer_id}/resume",
+    "/workspaces/{workspace_id}/timers/{timer_id}/resume",
     response_model=TimerResponse,
 )
 async def resume_timer_view(
-    timer_id: str,
     workspace_id: str,
+    timer_id: str,
     db: AsyncSession = Depends(get_db),
     manager: ConnectionManager = Depends(get_connection_manager),
 ) -> TimerResponse:
@@ -108,12 +103,12 @@ async def resume_timer_view(
 
 
 @router.post(
-    "/timers/{timer_id}/cancel",
+    "/workspaces/{workspace_id}/timers/{timer_id}/cancel",
     response_model=TimerResponse,
 )
 async def cancel_timer_view(
-    timer_id: str,
     workspace_id: str,
+    timer_id: str,
     db: AsyncSession = Depends(get_db),
     manager: ConnectionManager = Depends(get_connection_manager),
 ) -> TimerResponse:
@@ -136,12 +131,12 @@ async def cancel_timer_view(
 
 
 @router.get(
-    "/timers/{timer_id}",
+    "/workspaces/{workspace_id}/timers/{timer_id}",
     response_model=TimerResponse,
 )
 async def get_timer_view(
-    timer_id: str,
     workspace_id: str,
+    timer_id: str,
     db: AsyncSession = Depends(get_db),
 ) -> TimerResponse:
     """Get details of one timer session."""
@@ -157,12 +152,12 @@ async def get_timer_view(
 
 
 @router.get(
-    "/timers/history/{task_id}",
+    "/workspaces/{workspace_id}/timers/history/{task_id}",
     response_model=list[TimerHistoryItem],
 )
 async def get_timer_history_view(
-    task_id: str,
     workspace_id: str,
+    task_id: str,
     db: AsyncSession = Depends(get_db),
 ) -> list[TimerHistoryItem]:
     """Return timer session history for a specific task."""
