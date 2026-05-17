@@ -1,0 +1,27 @@
+# ── Lifeflow Backend ──────────────────────────────────────
+# Usage:
+#   docker compose up -d              # start in background
+#   docker compose up --build         # rebuild + start
+#   docker compose exec backend bash  # shell inside
+#   docker compose down -v            # stop + remove volumes
+
+services:
+  backend:
+    build: .
+    container_name: lifeflow_backend
+    ports:
+      - "${SERVER_PORT:-8000}:8000"
+    env_file:
+      - .env
+    volumes:
+      # Persist SQLite database and backups
+      - ./data:/app/data
+      # Mount for hot-reload in development (uncomment)
+      # - ./app:/app/app:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

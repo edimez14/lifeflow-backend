@@ -1,0 +1,20 @@
+# ── Docker ignore ────────────────────────────────────────
+__pycache__/
+*.pyc
+.venv/
+.env.local
+.pytest_cache/
+.git/
+.gitignore
+*.db
+*.db-journal
+*.log
+*.pid
+secrets/
+data/
+tests/
+backend.log
+backend.pid
+test_api_simple.py
+Makefile
+README.md
