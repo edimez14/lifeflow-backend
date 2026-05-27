@@ -93,6 +93,8 @@ async def create_event(
 ) -> Event:
     """Create one event in a workspace calendar."""
 
+    print(f"[BACKEND] create_event called: title={payload.title}, category={payload.category}, rrule={payload.recurrence_rule}")
+
     calendar = await db.scalar(
         select(Calendar).where(
             Calendar.id == payload.calendar_id,
@@ -100,13 +102,24 @@ async def create_event(
         )
     )
     if calendar is None:
+        print(f"[BACKEND] Calendar not found: {payload.calendar_id}")
         raise ValueError("Calendar not found")
+
+    # Validate recurrence_rule if provided
+    if payload.recurrence_rule:
+        try:
+            rule = rrulestr(payload.recurrence_rule)
+            print(f"[BACKEND] RRULE validated successfully: {payload.recurrence_rule}")
+        except Exception as exc:
+            print(f"[BACKEND] Invalid RRULE: {payload.recurrence_rule}, error: {exc}")
+            raise ValueError(f"Invalid recurrence rule: {exc}") from exc
 
     event_data = payload.model_dump()
     event = Event(**event_data)
     db.add(event)
     await db.commit()
     await db.refresh(event)
+    print(f"[BACKEND] Event created: id={event.id}, title={event.title}")
     return event
 
 
@@ -184,8 +197,13 @@ def expand_event_occurrences(
 
     exceptions = exceptions_by_date or {}
     duration = event.end_datetime - event.start_datetime
-    rule = rrulestr(event.recurrence_rule, dtstart=event.start_datetime)
-    instance_starts = rule.between(range_start, range_end, inc=True)
+    try:
+        rule = rrulestr(event.recurrence_rule, dtstart=event.start_datetime)
+        instance_starts = rule.between(range_start, range_end, inc=True)
+        print(f"[BACKEND] expand_event: event={event.title}, rrule={event.recurrence_rule}, instances_in_range={len(instance_starts)}")
+    except Exception as exc:
+        print(f"[BACKEND] expand_event: ERROR parsing rrule for event {event.title}: {exc}")
+        return occurrences
 
     for start in instance_starts:
         replacement = exceptions.get(start)
@@ -227,6 +245,7 @@ async def list_events(
         .where(Calendar.workspace_id == workspace_id)
     )
     all_events = list(result.scalars().all())
+    print(f"[BACKEND] list_events: found {len(all_events)} total events in workspace {workspace_id}")
 
     exceptions_by_parent: dict[str, dict[datetime, Event]] = {}
     for event in all_events:
@@ -248,6 +267,7 @@ async def list_events(
         )
 
     responses.sort(key=lambda item: item.start_datetime)
+    print(f"[BACKEND] list_events: returning {len(responses)} expanded occurrences")
     return responses
 
 
@@ -311,6 +331,8 @@ async def update_monthly_goal(
         return None
     goal.goal_text = payload.goal_text
     goal.action_plan = payload.action_plan
+    if payload.is_completed is not None:
+        goal.is_completed = payload.is_completed
     await db.commit()
     await db.refresh(goal)
     return goal

@@ -136,9 +136,11 @@ async def create_event_view(
 ) -> EventResponse:
     """Create one workspace event."""
 
+    print(f"[BACKEND] POST /events called: workspace={workspace_id}, title={payload.title}, rrule={payload.recurrence_rule}")
     try:
         event = await create_event(db, workspace_id, payload)
     except ValueError as exc:
+        print(f"[BACKEND] POST /events ValueError: {exc}")
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(exc),
@@ -151,6 +153,7 @@ async def create_event_view(
             "data": EventResponse.model_validate(event).model_dump(mode="json"),
         },
     )
+    print(f"[BACKEND] POST /events success: event_id={event.id}")
     return EventResponse.model_validate(event)
 
 

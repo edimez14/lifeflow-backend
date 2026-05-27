@@ -101,3 +101,5 @@ class MonthlyGoal(Base):
     month: Mapped[int] = mapped_column(Integer, nullable=False)
     goal_text: Mapped[str] = mapped_column(Text, nullable=False)
     action_plan: Mapped[str] = mapped_column(Text, nullable=False)
+    is_completed: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False)

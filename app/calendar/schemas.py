@@ -96,6 +96,7 @@ class MonthlyGoalBase(BaseModel):
     month: int
     goal_text: str
     action_plan: str
+    is_completed: bool = False
 
 
 class MonthlyGoalCreate(MonthlyGoalBase):
@@ -107,6 +108,7 @@ class MonthlyGoalUpdate(BaseModel):
 
     goal_text: str
     action_plan: str
+    is_completed: bool | None = None
 
 
 class MonthlyGoalResponse(MonthlyGoalBase):
